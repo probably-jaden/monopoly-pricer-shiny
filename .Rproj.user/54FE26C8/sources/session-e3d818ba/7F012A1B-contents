@@ -1,0 +1,10 @@
+library(reprex)
+
+(y <- 1:4)
+mean(y)
+reprex()
+
+library(glue)
+name <- "Hadley"
+message(glue("Hello {name}"))
+message(name)
