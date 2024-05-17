@@ -1,5 +1,5 @@
 #install.packages("shiny)
-#devtools::install_github("probably-jaden/Pricer", force = TRUE)
+#devtools::install_git("https://github.com/probably-jaden/Pricer", force = TRUE, upgrade = "always")
 
 library(shiny)
 library(Pricer)
@@ -103,6 +103,12 @@ server <- function(input, output) {
     df
   })
 
+  output$contents <- renderDataTable(userData(), options = list(pageLength = 5))
+
+  observeEvent(input$file1, {
+    updateSelectInput(inputId = "wtpCol", choices = names(userData()))
+  })
+
   userWTPCol <- reactive({
     if(input$wtpCol == "FILE NEEDS TO BE UPLOADED"){
       return(NULL)
@@ -118,47 +124,55 @@ server <- function(input, output) {
     demandDurable(userData(), input$wtpCol)
   })
 
-
-  output$contents <- renderDataTable(userData(), options = list(pageLength = 5))
-
-  observeEvent(input$file1, {
-    updateSelectInput(inputId = "wtpCol", choices = names(userData()))
-  })
+  userPop <- reactive(input$pop)
+  userSample <- reactive(nrow(userCleanData()))
+  userType <- reactive(input$regressType)
 
   observeEvent(input$wtpCol, {
     #browser()
     if(is.null(userWTPCol())){
       return(NULL)
     }
-    updateSliderInput(inputId = "price", min = min(userWTPCol()), max = max(userWTPCol()), value = median(userWTPCol()))
+    updateSliderInput(inputId = "price", min = min(userWTPCol()), max = max(userWTPCol()), value = mean(userWTPCol()))
+  })
+
+  observeEvent(input$wtpCol, {
+    if(is.null(userWTPCol())){
+      return(NULL)
+    }
+    updateNumericInput(inputId = "var", value = roundLog(mean(userWTPCol()) * .4))
+    updateNumericInput(inputId = "fix", value = roundLog(mean(userWTPCol()) * userPop() * .1))
   })
 
   output$demand_Plot_fit <- renderPlot({
     if(is.null(userCleanData())){
       return(NULL)
     }
-    demandPlot(data = userCleanData(), type = input$regressType, population = input$pop, sample = nrow(userCleanData()))
+    demandPlot(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
   })
 
   output$revenue_Plot_fit <- renderPlot({
     if(is.null(userCleanData())){
       return(NULL)
     }
-    revenuePlot(data = userCleanData(), type = input$regressType, population = input$pop, sample = nrow(userCleanData()))
+    revenuePlot(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
   })
+
+  userVar <- reactive(input$var)
+  userFix <- reactive(input$fix)
 
   output$profit_Plot <- renderPlot({
     if(is.null(userCleanData())){
       return(NULL)
     }
-    profitPlot(data = userCleanData(), type = input$regressType, variable = input$var, fixed = input$fix, population = input$pop, sample = nrow(userCleanData()))
+    profitPlot(data = userCleanData(), type = userType(), variable = userVar(), fixed = userFix(), population = userPop(), sample = userSample())
   })
 
   output$profit_Plot_func <- renderPlot({
     if(is.null(userCleanData())){
       return(NULL)
     }
-    profitFunctionPlot(price = input$price, data = userCleanData(), type = input$regressType, variable = input$var, fixed = input$fix, population = input$pop, sample = nrow(userCleanData()))
+    profitFunctionPlot(price = input$price, data = userCleanData(), type = userType(), variable = userVar(), fixed = userFix(), population = userPop(), sample = userSample())
   })
 }
 
