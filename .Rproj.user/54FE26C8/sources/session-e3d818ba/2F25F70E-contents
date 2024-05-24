@@ -63,7 +63,8 @@ ui <- fluidPage(
            plotOutput("demand_Plot_fit")
            ),
     column(4,
-           plotOutput("revenue_Plot_fit")
+           #plotOutput("revenue_Plot_fit")
+           verbatimTextOutput("demand_summary")
            )
   ),
   fluidRow(
@@ -136,6 +137,8 @@ server <- function(input, output) {
     updateSliderInput(inputId = "price", min = min(userWTPCol()), max = max(userWTPCol()), value = mean(userWTPCol()))
   })
 
+  userPrice <- reactive(input$price)
+
   observeEvent(input$wtpCol, {
     if(is.null(userWTPCol())){
       return(NULL)
@@ -148,7 +151,7 @@ server <- function(input, output) {
     if(is.null(userCleanData())){
       return(NULL)
     }
-    demandPlot(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
+    demandPlot(price = userPrice(), data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
   })
 
   output$revenue_Plot_fit <- renderPlot({
@@ -157,6 +160,14 @@ server <- function(input, output) {
     }
     revenuePlot(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
   })
+
+  output$demand_summary <- renderPrint({
+    if(is.null(userCleanData())){
+      return(NULL)
+    }
+    demandSummary(data = userCleanData(), type = userType())
+  })
+
 
   userVar <- reactive(input$var)
   userFix <- reactive(input$fix)
