@@ -1,4 +1,5 @@
 #install.packages("shiny)
+
 #devtools::install_git("https://github.com/probably-jaden/Pricer", force = TRUE, upgrade = "always")
 
 library(shiny)
@@ -56,7 +57,7 @@ ui <- fluidPage(
   tags$head(
     tags$style(HTML("
       .scrollable-text {
-        max-height: 400px;
+        max-height: 450px;
         overflow-y: auto;
         white-space: pre-wrap;  /* preserve formatting */
       }
@@ -68,19 +69,28 @@ ui <- fluidPage(
            wellPanel(
              selectInput("wtpCol", "Willingness to Pay Column Name", choices = c("FILE NEEDS TO BE UPLOADED")),
              selectInput("regressType", "Regression Transformation", choices = c("Linear", "Exponential", "Sigmoid")),
-             numericInput("pop", "Customer Population Size", min = 0, value = 1000)
+             numericInput("pop", "Customer Population Size", min = 0, value = 1000),
+             sliderInput("price", "Price", min = 0, max = 10, value = 3, step = .25)
            )
            ),
     column(4,
-           plotOutput("demand_Plot_fit")
+           tabsetPanel(
+             tabPanel("Demand",
+                      plotOutput("demand_Plot_fit")
+                      )
+           )
            ),
     column(4,
            #plotOutput("revenue_Plot_fit")
            tabsetPanel(
              tabPanel("Interpretations",  align = "center",
                       br(), br(), br(),
-                               uiOutput("demand_math_formula"),
-                      br(), br(),
+                      uiOutput("rSq_text"),
+                      div(style = "font-size: 14px;",
+                          uiOutput("rSq_interpretation")
+                      ),
+                      br(), br(), br(),
+                      uiOutput("demand_math_formula"),
                       div(style = "font-size: 14px;",
                           uiOutput("intercept_interpretation")
                           ),
@@ -88,6 +98,8 @@ ui <- fluidPage(
                       div(style = "font-size: 14px;",
                           uiOutput("slope_interpretation")
                           )
+                      #br(),
+
                       ),
 
              tabPanel("Summary",
@@ -99,16 +111,33 @@ ui <- fluidPage(
   fluidRow(
     column(4,
            wellPanel(
-             sliderInput("price", "Price", min = 0, max = 10, value = 3, step = .25),
              numericInput("var", "Variable Cost of Product", min = 0, value = 10),
              numericInput("fix", "Fixed Cost (Overhead)", min = 0, value = 1000)
            )
            ),
     column(4,
-           plotOutput("profit_Plot_func"),
+           tabsetPanel(
+             tabPanel("Profit",
+                      plotOutput("profit_Plot_func"),
+                      )
+           )
            ),
     column(4,
-           plotOutput("profit_Plot")
+           tabsetPanel(
+             tabPanel("optimized profit", align = "center",
+                      br(), br(),
+                     div(style = "font-size: 20px;",
+                         uiOutput("opt_price")
+                     ),
+                     br(),
+                     div(style = "font-size: 20px;",
+                         uiOutput("opt_profit")
+                     )
+             ),
+             tabPanel("revenue & cost",
+                      plotOutput("profit_Plot")
+             )
+           )
            )
     )
 )
@@ -222,7 +251,6 @@ server <- function(input, output) {
     HTML(slopeText)
   })
 
-
   output$demand_math_formula <- renderUI({
     if(is.null(userCleanData())){
       return(NULL)
@@ -230,7 +258,7 @@ server <- function(input, output) {
     latexMaths <- demandFormula2(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
 
     withMathJax(
-      helpText(paste0("$$\\large{\\text{Quantity Sold} \\ = \\ ", latexMaths, "}$$"))
+      helpText(paste0("$$\\large{ \\text{Quantity Sold} \\ = \\ ", latexMaths, "}$$"))
     )
   })
 
@@ -241,9 +269,65 @@ server <- function(input, output) {
     demandFormula(data = userCleanData(), type = userType(), population = userPop(), sample = userSample())
   })
 
+  output$rSq_text  <- renderUI({
+    if(is.null(userCleanData())){
+      return(NULL)
+    }
+    rSq <- round(rSquaredDemand(data = userCleanData(), userType()), 2)
+    withMathJax(
+      helpText(paste0("$$\\Large{R^2 \\ = \\ ", rSq, "}$$"))
+    )
+  })
+
+  output$rSq_interpretation <- renderUI({
+    if(is.null(userCleanData())){
+      return(NULL)
+    }
+    rSq <- round(rSquaredDemand(data = userCleanData(), userType()), 3)
+    rSqInterp <- paste0("<b>", rSq * 100, "%</b> of the variation in quantity sold can be explained by the variation in price.")
+    HTML(rSqInterp)
+  })
 
   userVar <- reactive(input$var)
   userFix <- reactive(input$fix)
+
+  output$opt_price <- renderUI({
+    if(is.null(userCleanData())){
+      return(NULL)
+    }
+
+    fQ <- fQ(data = userCleanData(), userType(), userPop(), userSample())
+    if (class(fQ) == class(NA)) {
+      return(NA)
+    }
+    fR <- fR(userCleanData(), userType(), userPop(), userSample())
+    fC <- fC(userVar(), userFix(), fQ)
+    fPi <- fPi(fR, fC)
+
+    opt_Price <- optimize(fPi, lower = 0, upper = max(userCleanData()$wtp), maximum = TRUE)[[1]]
+    show_Price <- paste0("<b>Price</b>: $", conNum_short(round(opt_Price, 2)))
+
+    HTML(show_Price)
+  })
+
+  output$opt_profit <- renderUI({
+    if(is.null(userCleanData())){
+      return(NULL)
+    }
+
+    fQ <- fQ(data = userCleanData(), userType(), userPop(), userSample())
+    if (class(fQ) == class(NA)) {
+      return(NA)
+    }
+    fR <- fR(userCleanData(), userType(), userPop(), userSample())
+    fC <- fC(userVar(), userFix(), fQ)
+    fPi <- fPi(fR, fC)
+
+    opt_Profit <- optimize(fPi, lower = 0, upper = max(userCleanData()$wtp), maximum = TRUE)[[2]]
+    show_Profit <- paste0("<b>Profit</b>: $", conNum_long(round(opt_Profit, 2)))
+
+    HTML(show_Profit)
+  })
 
   output$profit_Plot <- renderPlot({
     if(is.null(userCleanData())){
@@ -263,10 +347,10 @@ server <- function(input, output) {
 # Create Shiny app ----
 shinyApp(ui, server)
 
-#library(tidyverse)
-#cp <- read_csv("~/Desktop/CupcakesTest.csv")
-#cpC <- demandDurable(cp, "cupcakes")
+
 #demand
 #demandFormula(cpC, "Linear", 1, 1)
 #demandFormula2(cpC, "Exponential", 1, 1)[[1]]
 #demandInterpret(cpC, "Linear", 1, 1)[[1]]
+
+
