@@ -162,7 +162,7 @@ server <- function(input, output) {
     df
   })
 
-  output$contents <- renderDataTable(userData(), options = list(pageLength = 5))
+  output$contents <- renderDataTable(userData(), options = list(pageLength = 8))
 
   observeEvent(input$file1, {
     updateSelectInput(inputId = "wtpCol", choices = names(userData()))
